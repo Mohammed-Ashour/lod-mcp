@@ -5,6 +5,10 @@ build/
 dist/
 wheels/
 *.egg-info
+.python-version
 
 # Virtual environments
 .venv
+
+run-mcp.sh
+uninstall.sh
