@@ -46,7 +46,7 @@ def search_word(word: str, max_results: int = 5) -> List[str]:
 def search_word_brief(word: str, max_results: int = 3) -> Dict[str, str]:
     '''
     Search for words returning minimal preview as key-value pairs.
-    
+
     Args:
         word: Word to search
         max_results: Max results (default: 3)
@@ -57,7 +57,7 @@ def search_word_brief(word: str, max_results: int = 3) -> Dict[str, str]:
     data = search_api(word)
     if data is None:
         return {}
-    
+
     results = {}
     for item in data.get("results", [])[:max_results]:
         lod_id = item.get("id")
@@ -65,7 +65,40 @@ def search_word_brief(word: str, max_results: int = 3) -> Dict[str, str]:
         pos = item.get("pos", "")
         pos_short = pos.replace("SUBST", "N").replace("VRB", "V") if pos else ""
         results[lod_id] = f"{word_text} ({pos_short})" if pos_short else word_text
-    
+
+    return results
+
+
+@mcp.tool()
+def search_words(words: List[str], max_results: int = 3) -> Dict[str, Dict[str, str]]:
+    '''
+    Search for multiple words at once and return results for each.
+
+    Args:
+        words: List of words to search
+        max_results: Max results per word (default: 3)
+
+    Returns:
+        Dictionary mapping each input word to its search results
+        Format: {"word": {"ID1": "word (POS)", "ID2": "word (POS)"}}
+    '''
+    results = {}
+    for word in words:
+        data = search_api(word)
+        if data is None:
+            results[word] = {}
+            continue
+
+        word_results = {}
+        for item in data.get("results", [])[:max_results]:
+            lod_id = item.get("id")
+            word_text = item.get("word_lb")
+            pos = item.get("pos", "")
+            pos_short = pos.replace("SUBST", "N").replace("VRB", "V") if pos else ""
+            word_results[lod_id] = f"{word_text} ({pos_short})" if pos_short else word_text
+
+        results[word] = word_results
+
     return results
 
 
@@ -199,6 +232,110 @@ def get_entry(lod_id: str, langs: str = "de,fr,en", max_examples: int = 2) -> Di
 
 
 @mcp.tool()
+def get_entries(lod_ids: List[str], langs: str = "de,fr,en", max_examples: int = 2) -> Dict[str, Dict[str, Any]]:
+    '''
+    Get word details for multiple LOD entry IDs at once.
+    
+    Args:
+        lod_ids: List of LOD entry IDs to look up
+        langs: Comma-separated language codes (default: "de,fr,en")
+        max_examples: Max examples per entry (default: 2, 0 to skip)
+
+    Returns:
+        Dictionary mapping each LOD ID to its entry data
+        Format: {"HAUS1": {"w": "Haus", "pos": "SUBST", "tr": {...}}, "HAUSEN1": {...}}
+    '''
+    results = {}
+    for lod_id in lod_ids:
+        data = entry_api(lod_id)
+        if data is None:
+            results[lod_id] = {"error": f"Not found: {lod_id}"}
+            continue
+        
+        entry = data.get("entry", {})
+        requested_langs = [l.strip()[:2] for l in langs.split(",")]
+        
+        result = {
+            "id": lod_id,
+            "w": entry.get("lemma"),
+            "pos": entry.get("partOfSpeech"),
+        }
+        
+        ipa = entry.get("ipa")
+        if ipa:
+            result["ipa"] = ipa
+        
+        # Translations
+        translations: Dict[str, List[str]] = {}
+        for ms in entry.get("microStructures", []):
+            for gu in ms.get("grammaticalUnits", []):
+                for meaning in gu.get("meanings", []):
+                    for lang, content in meaning.get("targetLanguages", {}).items():
+                        if lang not in requested_langs:
+                            continue
+                        if lang not in translations:
+                            translations[lang] = []
+                        
+                        parts = content.get("parts", [])
+                        trans = " ".join(
+                            p.get("content", "") 
+                            for p in parts 
+                            if p.get("type") in ["translation", "semanticClarifier"]
+                        )
+                        if trans and trans not in translations[lang]:
+                            translations[lang].append(trans)
+        
+        if translations:
+            result["tr"] = {k: "; ".join(v[:3]) for k, v in translations.items()}
+        
+        # Examples
+        if max_examples > 0:
+            examples = []
+            count = 0
+            for ms in entry.get("microStructures", []):
+                for gu in ms.get("grammaticalUnits", []):
+                    for meaning in gu.get("meanings", []):
+                        for ex in meaning.get("examples", []):
+                            if count >= max_examples:
+                                break
+                            for part in ex.get("parts", []):
+                                if part.get("type") == "text":
+                                    words = [
+                                        p.get("content", "") 
+                                        for p in part.get("parts", [])
+                                        if p.get("type") in ["word", "inflectedHeadword"]
+                                    ]
+                                    if words:
+                                        examples.append(" ".join(words))
+                                        count += 1
+                                        break
+            if examples:
+                result["ex"] = examples
+        
+        # Inflections
+        inflections = []
+        for ms in entry.get("microStructures", []):
+            for gu in ms.get("grammaticalUnits", []):
+                for meaning in gu.get("meanings", []):
+                    for form in meaning.get("inflection", {}).get("forms", []):
+                        if form.get("content"):
+                            inflections.append(form["content"])
+        
+        if inflections:
+            result["infl"] = ", ".join(list(dict.fromkeys(inflections))[:5])
+        
+        # Audio flags
+        if entry.get("audioFiles"):
+            result["audio"] = True
+        if entry.get("videos"):
+            result["sign"] = True
+        
+        results[lod_id] = _compact(result)
+    
+    return results
+
+
+@mcp.tool()
 def get_def(lod_id: str, lang: str = "en") -> str:
     '''
     Get single-language definition as string (minimal tokens).
@@ -235,6 +372,52 @@ def get_def(lod_id: str, lang: str = "en") -> str:
     if translations:
         return f"{word}: " + "; ".join(translations[:3])
     return f"{word}: No {lang} translation available"
+
+
+@mcp.tool()
+def get_defs(lod_ids: List[str], lang: str = "en") -> Dict[str, str]:
+    '''
+    Get single-language definitions for multiple LOD entry IDs at once.
+    
+    Args:
+        lod_ids: List of LOD entry IDs to look up
+        lang: Single language code (default: "en")
+
+    Returns:
+        Dictionary mapping each LOD ID to its definition string
+        Format: {"HAUS1": "Haus: house building", "HAUSEN1": "hausen: to live"}
+    '''
+    results = {}
+    for lod_id in lod_ids:
+        data = entry_api(lod_id)
+        if data is None:
+            results[lod_id] = f"Error: Entry {lod_id} not found"
+            continue
+        
+        entry = data.get("entry", {})
+        word = entry.get("lemma", lod_id)
+        
+        translations = []
+        for ms in entry.get("microStructures", []):
+            for gu in ms.get("grammaticalUnits", []):
+                for meaning in gu.get("meanings", []):
+                    target = meaning.get("targetLanguages", {}).get(lang)
+                    if target:
+                        parts = target.get("parts", [])
+                        trans = " ".join(
+                            p.get("content", "") 
+                            for p in parts 
+                            if p.get("type") in ["translation", "semanticClarifier"]
+                        )
+                        if trans and trans not in translations:
+                            translations.append(trans)
+        
+        if translations:
+            results[lod_id] = f"{word}: " + "; ".join(translations[:3])
+        else:
+            results[lod_id] = f"{word}: No {lang} translation available"
+    
+    return results
 
 
 @mcp.tool()

@@ -10,6 +10,7 @@ This MCP server enables Claude to look up Luxembourgish words, get translations,
 - **Cached**: 1-hour TTL cache reduces API calls and improves response times  
 - **Rate-Limited**: Respects LOD API with 100ms intervals between requests
 - **Multi-Language**: Supports German (de), French (fr), English (en), Portuguese (pt), and Dutch (nl) translations
+- **Batch Operations**: Look up multiple words/IDs in a single call (`search_words`, `get_entries`, `get_defs`)
 
 ## Installation
 
@@ -197,6 +198,82 @@ Get single-language definition as minimal string.
 get_def("HAUS1", "en")  # Returns: "Haus: house building; house household, family"
 ```
 
+---
+
+## Batch Operations (Multi-Lookup Tools)
+
+Use these tools when you need to look up **multiple words or IDs at once**. They reduce API calls and token usage compared to calling single-word tools repeatedly.
+
+### `search_words` ⭐ RECOMMENDED
+
+Search for multiple words simultaneously. Returns a dictionary mapping each input word to its search results.
+
+**Parameters:**
+
+- `words` (List[str]): List of words to search
+- `max_results` (int, optional): Max results per word (default: 3)
+
+**Returns:** `Dict[str, Dict[str, str]]` - `{word: {id: "word (POS)", ...}, ...}`
+
+**Example:**
+
+```python
+search_words(["haus", "schoul", "bierg"])
+# Returns:
+# {
+#   "haus": {"HAUS1": "Haus (N)", "HAUSEN1": "hausen (V)"},
+#   "schoul": {"SCHOUL1": "Schoul (N)"},
+#   "bierg": {"BIERG1": "Bierg (N)"}
+# }
+```
+
+### `get_entries` ⭐ RECOMMENDED
+
+Get full entry details for multiple LOD IDs at once.
+
+**Parameters:**
+
+- `lod_ids` (List[str]): List of LOD entry IDs
+- `langs` (str, optional): Comma-separated language codes (default: "de,fr,en")
+- `max_examples` (int, optional): Max examples per entry (default: 2)
+
+**Returns:** `Dict[str, Dict]` - `{lod_id: entry_data, ...}`
+
+**Example:**
+
+```python
+get_entries(["HAUS1", "SCHOUL1"], langs="en", max_examples=1)
+# Returns:
+# {
+#   "HAUS1": {"id": "HAUS1", "w": "Haus", "pos": "SUBST", "tr": {"en": "house"}},
+#   "SCHOUL1": {"id": "SCHOUL1", "w": "Schoul", "pos": "SUBST", "tr": {"en": "school"}}
+# }
+```
+
+### `get_defs` ⭐ RECOMMENDED
+
+Get minimal definitions for multiple LOD IDs at once.
+
+**Parameters:**
+
+- `lod_ids` (List[str]): List of LOD entry IDs
+- `lang` (str, optional): Language code (default: "en")
+
+**Returns:** `Dict[str, str]` - `{lod_id: "word: definition", ...}`
+
+**Example:**
+
+```python
+get_defs(["HAUS1", "SCHOUL1"], lang="en")
+# Returns:
+# {
+#   "HAUS1": "Haus: house building",
+#   "SCHOUL1": "Schoul: school; school building"
+# }
+```
+
+---
+
 ### 6. `cache_stats`
 
 Get cache performance statistics.
@@ -210,6 +287,8 @@ Clear the API response cache.
 **Returns:** `str` - "OK"
 
 ## Usage Examples
+
+> 💡 **Tip for AI Tools:** When looking up multiple words, always use batch tools (`search_words`, `get_entries`, `get_defs`) instead of calling single-word tools in a loop. They're faster and use fewer tokens and tool calls.
 
 ### Basic Word Lookup
 
@@ -232,6 +311,21 @@ ids = search_word("goen")
 # Get full entry
 entry = get_entry("GOEN1", langs="en", max_examples=1)
 # Check entry["infl"] for conjugated forms
+```
+
+### Batch Lookup Example (Recommended)
+
+```python
+# Search multiple words at once
+results = search_words(["haus", "schoul", "bierg"], max_results=2)
+# Returns all results in one call
+
+# Get definitions for multiple IDs
+ids = ["HAUS1", "SCHOUL1", "BIERG1"]
+defs = get_defs(ids, lang="en")
+
+# Get full entries for multiple IDs
+entries = get_entries(ids, langs="de,fr", max_examples=1)
 ```
 
 ## Troubleshooting
