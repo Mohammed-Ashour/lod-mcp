@@ -16,7 +16,7 @@ This MCP server enables Claude to look up Luxembourgish words, get translations,
 ### Quick Install (Recommended)
 
 ```bash
-git clone <your-repo-url>
+git clone https://github.com/Mohammed-Ashour/lod-mcp
 cd lod-mcp
 ./install.sh
 ```
@@ -41,7 +41,7 @@ install `uv` from [here](https://docs.astral.sh/uv/getting-started/installation/
 **2. Setup:**
 
 ```bash
-git clone <your-repo-url>
+git clone https://github.com/Mohammed-Ashour/lod-mcp
 cd lod-mcp
 ```
 
