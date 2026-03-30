@@ -328,6 +328,23 @@ defs = get_defs(ids, lang="en")
 entries = get_entries(ids, langs="de,fr", max_examples=1)
 ```
 
+## Using the LOD Skill (Non-MCP Tools)
+
+If your AI tool doesn't support MCP, you can use the LOD skill directly. The skill provides the same functionality by making HTTP API calls to LOD.
+
+
+### Skill Features
+
+The skill provides structured guidance for:
+
+- **Translation lookups** (de, fr, en, pt, nl)
+- **Pronunciation** (IPA notation)
+- **Conjugations** (complete verb tables)
+- **Example sentences** with audio links
+- **Batch operations** (efficient multi-word lookups)
+- **Error handling** patterns
+
+
 ## Troubleshooting
 
 ### Installation Issues
@@ -352,6 +369,12 @@ curl -LsSf https://astral.sh/uv/install.sh | sh
 ### Import errors
 
 Run from project root or use the wrapper script which handles `PYTHONPATH`.
+
+
+### API errors?
+- Check you're waiting 100ms between requests
+- Verify word exists in Luxembourgish
+- Test endpoints directly with curl
 
 ### Reinstalling
 
