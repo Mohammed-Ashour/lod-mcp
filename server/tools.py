@@ -7,33 +7,17 @@ from typing import Any
 from mcp.server.fastmcp import FastMCP
 
 try:
-    from server.api import (
-        LODAPIError,
-        entry_api,
-        search_api,
-        suggest_api,
-    )
+    from server.api import LODAPIError, entry_api, search_api, suggest_api
     from server.cache import cache
     from server.pos import normalize_pos
+    from server.projections import project_definition, project_entry
 except ImportError:
     from api import LODAPIError, entry_api, search_api, suggest_api
     from cache import cache
     from pos import normalize_pos
+    from projections import project_definition, project_entry
 
 mcp = FastMCP("lod-mcp")
-
-
-def _compact(obj: Any) -> Any:
-    """Remove null/empty values recursively."""
-    if isinstance(obj, dict):
-        return {
-            k: _compact(v)
-            for k, v in obj.items()
-            if v is not None and v != [] and v != {} and v != ""
-        }
-    if isinstance(obj, list):
-        return [_compact(v) for v in obj]
-    return obj
 
 
 def _tool_error(error: LODAPIError) -> dict[str, Any]:
@@ -178,85 +162,7 @@ def get_entry(lod_id: str, langs: str = "de,fr,en", max_examples: int = 2) -> di
     except LODAPIError as error:
         return _tool_error(error)
 
-    entry = data.get("entry", {})
-    requested_langs = [l.strip()[:2] for l in langs.split(",")]
-
-    result = {
-        "id": lod_id,
-        "w": entry.get("lemma"),
-        "pos": entry.get("partOfSpeech"),
-    }
-
-    ipa = entry.get("ipa")
-    if ipa:
-        result["ipa"] = ipa
-
-    # Translations
-    translations: dict[str, list[str]] = {}
-    for ms in entry.get("microStructures", []):
-        for gu in ms.get("grammaticalUnits", []):
-            for meaning in gu.get("meanings", []):
-                for lang, content in meaning.get("targetLanguages", {}).items():
-                    if lang not in requested_langs:
-                        continue
-                    if lang not in translations:
-                        translations[lang] = []
-
-                    parts = content.get("parts", [])
-                    trans = " ".join(
-                        p.get("content", "")
-                        for p in parts
-                        if p.get("type") in ["translation", "semanticClarifier"]
-                    )
-                    if trans and trans not in translations[lang]:
-                        translations[lang].append(trans)
-
-    if translations:
-        result["tr"] = {k: "; ".join(v[:3]) for k, v in translations.items()}
-
-    # Examples
-    if max_examples > 0:
-        examples = []
-        count = 0
-        for ms in entry.get("microStructures", []):
-            for gu in ms.get("grammaticalUnits", []):
-                for meaning in gu.get("meanings", []):
-                    for ex in meaning.get("examples", []):
-                        if count >= max_examples:
-                            break
-                        for part in ex.get("parts", []):
-                            if part.get("type") == "text":
-                                words = [
-                                    p.get("content", "")
-                                    for p in part.get("parts", [])
-                                    if p.get("type") in ["word", "inflectedHeadword"]
-                                ]
-                                if words:
-                                    examples.append(" ".join(words))
-                                    count += 1
-                                    break
-        if examples:
-            result["ex"] = examples
-
-    # Inflections
-    inflections = []
-    for ms in entry.get("microStructures", []):
-        for gu in ms.get("grammaticalUnits", []):
-            for meaning in gu.get("meanings", []):
-                for form in meaning.get("inflection", {}).get("forms", []):
-                    if form.get("content"):
-                        inflections.append(form["content"])
-
-    if inflections:
-        result["infl"] = ", ".join(list(dict.fromkeys(inflections))[:5])
-
-    # Audio flags
-    if entry.get("audioFiles"):
-        result["audio"] = True
-    if entry.get("videos"):
-        result["sign"] = True
-
-    return _compact(result)
+    return project_entry(data, lod_id, langs=langs, max_examples=max_examples)
 
 
 @mcp.tool()
@@ -285,85 +191,7 @@ def get_entries(
             results[lod_id] = _tool_error(error)
             continue
 
-        entry = data.get("entry", {})
-        requested_langs = [l.strip()[:2] for l in langs.split(",")]
-
-        result = {
-            "id": lod_id,
-            "w": entry.get("lemma"),
-            "pos": entry.get("partOfSpeech"),
-        }
-
-        ipa = entry.get("ipa")
-        if ipa:
-            result["ipa"] = ipa
-
-        # Translations
-        translations: dict[str, list[str]] = {}
-        for ms in entry.get("microStructures", []):
-            for gu in ms.get("grammaticalUnits", []):
-                for meaning in gu.get("meanings", []):
-                    for lang, content in meaning.get("targetLanguages", {}).items():
-                        if lang not in requested_langs:
-                            continue
-                        if lang not in translations:
-                            translations[lang] = []
-
-                        parts = content.get("parts", [])
-                        trans = " ".join(
-                            p.get("content", "")
-                            for p in parts
-                            if p.get("type") in ["translation", "semanticClarifier"]
-                        )
-                        if trans and trans not in translations[lang]:
-                            translations[lang].append(trans)
-
-        if translations:
-            result["tr"] = {k: "; ".join(v[:3]) for k, v in translations.items()}
-
-        # Examples
-        if max_examples > 0:
-            examples = []
-            count = 0
-            for ms in entry.get("microStructures", []):
-                for gu in ms.get("grammaticalUnits", []):
-                    for meaning in gu.get("meanings", []):
-                        for ex in meaning.get("examples", []):
-                            if count >= max_examples:
-                                break
-                            for part in ex.get("parts", []):
-                                if part.get("type") == "text":
-                                    words = [
-                                        p.get("content", "")
-                                        for p in part.get("parts", [])
-                                        if p.get("type") in ["word", "inflectedHeadword"]
-                                    ]
-                                    if words:
-                                        examples.append(" ".join(words))
-                                        count += 1
-                                        break
-            if examples:
-                result["ex"] = examples
-
-        # Inflections
-        inflections = []
-        for ms in entry.get("microStructures", []):
-            for gu in ms.get("grammaticalUnits", []):
-                for meaning in gu.get("meanings", []):
-                    for form in meaning.get("inflection", {}).get("forms", []):
-                        if form.get("content"):
-                            inflections.append(form["content"])
-
-        if inflections:
-            result["infl"] = ", ".join(list(dict.fromkeys(inflections))[:5])
-
-        # Audio flags
-        if entry.get("audioFiles"):
-            result["audio"] = True
-        if entry.get("videos"):
-            result["sign"] = True
-
-        results[lod_id] = _compact(result)
+        results[lod_id] = project_entry(data, lod_id, langs=langs, max_examples=max_examples)
 
     return results
 
@@ -385,27 +213,7 @@ def get_def(lod_id: str, lang: str = "en") -> str | dict[str, Any]:
     except LODAPIError as error:
         return _tool_error(error)
 
-    entry = data.get("entry", {})
-    word = entry.get("lemma", lod_id)
-
-    translations = []
-    for ms in entry.get("microStructures", []):
-        for gu in ms.get("grammaticalUnits", []):
-            for meaning in gu.get("meanings", []):
-                target = meaning.get("targetLanguages", {}).get(lang)
-                if target:
-                    parts = target.get("parts", [])
-                    trans = " ".join(
-                        p.get("content", "")
-                        for p in parts
-                        if p.get("type") in ["translation", "semanticClarifier"]
-                    )
-                    if trans and trans not in translations:
-                        translations.append(trans)
-
-    if translations:
-        return f"{word}: " + "; ".join(translations[:3])
-    return f"{word}: No {lang} translation available"
+    return project_definition(data, lod_id, lang=lang)
 
 
 @mcp.tool()
@@ -429,28 +237,7 @@ def get_defs(lod_ids: list[str], lang: str = "en") -> dict[str, str | dict[str, 
             results[lod_id] = _tool_error(error)
             continue
 
-        entry = data.get("entry", {})
-        word = entry.get("lemma", lod_id)
-
-        translations = []
-        for ms in entry.get("microStructures", []):
-            for gu in ms.get("grammaticalUnits", []):
-                for meaning in gu.get("meanings", []):
-                    target = meaning.get("targetLanguages", {}).get(lang)
-                    if target:
-                        parts = target.get("parts", [])
-                        trans = " ".join(
-                            p.get("content", "")
-                            for p in parts
-                            if p.get("type") in ["translation", "semanticClarifier"]
-                        )
-                        if trans and trans not in translations:
-                            translations.append(trans)
-
-        if translations:
-            results[lod_id] = f"{word}: " + "; ".join(translations[:3])
-        else:
-            results[lod_id] = f"{word}: No {lang} translation available"
+        results[lod_id] = project_definition(data, lod_id, lang=lang)
 
     return results
 
