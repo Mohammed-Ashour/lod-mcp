@@ -24,10 +24,10 @@ cd lod-mcp
 
 The install script will:
 
-- ✓ Check Python version (3.10+ required)
+- ✓ Check Python version (3.13+ required)
 - ✓ Create virtual environment
-- ✓ Install dependencies (mcp, requests)
-- ✓ Create wrapper script with correct paths
+- ✓ Install the project and its dependencies
+- ✓ Create a wrapper script that runs the installed CLI
 - ✓ Test the installation
 - ✓ Show Claude Desktop configuration
 
@@ -51,17 +51,15 @@ cd lod-mcp
 Using `uv`:
 
 ```bash
-uv venv .venv --python=3.13
-source .venv/bin/activate
-uv pip install mcp requests
+uv venv .venv --python 3.13
+uv pip install --python .venv/bin/python -e .
 ```
 
 Or using standard Python:
 
 ```bash
-python3 -m venv .venv
-source .venv/bin/activate
-pip install mcp requests
+python3.13 -m venv .venv
+.venv/bin/python -m pip install -e .
 ```
 
 **4. Create Wrapper Script:**
@@ -71,8 +69,7 @@ Create `run-mcp.sh`:
 ```bash
 #!/bin/bash
 export PYTHONUNBUFFERED=1
-export PYTHONPATH="/path/to/lod-mcp/.venv/lib/python3.13/site-packages:$PYTHONPATH"
-exec /path/to/lod-mcp/.venv/bin/python /path/to/lod-mcp/server/main.py
+exec /path/to/lod-mcp/.venv/bin/lod-mcp
 ```
 
 Make executable:
@@ -353,7 +350,7 @@ The skill provides structured guidance for:
 
 ```bash
 # Check Python version
-python3 --version  # Should be 3.10+
+python3.13 --version  # Should be 3.13+
 
 # Install uv (recommended package manager)
 curl -LsSf https://astral.sh/uv/install.sh | sh
@@ -361,14 +358,14 @@ curl -LsSf https://astral.sh/uv/install.sh | sh
 
 ### Server won't start
 
-1. Check Python path in `run-mcp.sh` matches your venv
+1. Ensure the CLI exists: `.venv/bin/lod-mcp`
 2. Ensure wrapper script is executable: `chmod +x run-mcp.sh`
 3. Check Claude Desktop logs: `~/Library/Logs/Claude/mcp*.log` (macOS)
 4. Test manually: `./run-mcp.sh` - should output JSON
 
 ### Import errors
 
-Run from project root or use the wrapper script which handles `PYTHONPATH`.
+Reinstall the project into the virtual environment with `.venv/bin/python -m pip install -e .`.
 
 
 ### API errors?

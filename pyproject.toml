@@ -1,10 +1,20 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
 [project]
 name = "lod-mcp"
 version = "0.1.0"
 description = "A token-optimized Model Context Protocol server for the Luxembourgish Online Dictionary"
 readme = "README.md"
-requires-python = ">=3.10"
+requires-python = ">=3.13"
 dependencies = [
     "mcp[cli]>=1.26.0",
     "requests>=2.33.0",
 ]
+
+[project.scripts]
+lod-mcp = "server.main:main"
+
+[tool.setuptools.packages.find]
+include = ["server*"]
