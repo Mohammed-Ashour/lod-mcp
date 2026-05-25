@@ -10,25 +10,35 @@ try:
     from server.api import LODAPIError, entry_api, search_api, suggest_api
     from server.cache import cache
     from server.pos import normalize_pos
-    from server.projections import project_definition, project_entry
+    from server.projections import project_conjugation, project_definition, project_entry
 except ImportError:
     from api import LODAPIError, entry_api, search_api, suggest_api
     from cache import cache
     from pos import normalize_pos
-    from projections import project_definition, project_entry
+    from projections import project_conjugation, project_definition, project_entry
 
 mcp = FastMCP("lod-mcp")
 
 
+def _error_payload(error_type: str, message: str, status: int | None = None) -> dict[str, Any]:
+    """Build a compact MCP error payload."""
+    payload: dict[str, Any] = {
+        "type": error_type,
+        "message": message,
+    }
+    if status is not None:
+        payload["status"] = status
+    return {"error": payload}
+
+
 def _tool_error(error: LODAPIError) -> dict[str, Any]:
     """Convert upstream exceptions into compact MCP error payloads."""
-    payload: dict[str, Any] = {
-        "type": error.error_type,
-        "message": error.message,
-    }
-    if error.status_code is not None:
-        payload["status"] = error.status_code
-    return {"error": payload}
+    return _error_payload(error.error_type, error.message, error.status_code)
+
+
+def _local_error(error_type: str, message: str) -> dict[str, Any]:
+    """Build a compact tool-level error payload."""
+    return _error_payload(error_type, message)
 
 
 def _brief_results(items: list[dict[str, Any]], max_results: int) -> dict[str, str]:
@@ -241,6 +251,60 @@ def get_defs(lod_ids: list[str], lang: str = "en") -> dict[str, str | dict[str, 
             continue
 
         results[lod_id] = project_definition(data, lod_id, lang=lang)
+
+    return results
+
+
+@mcp.tool()
+def get_conjugation(lod_id: str) -> dict[str, Any]:
+    """
+    Get compact verb conjugation data for a single LOD entry ID.
+
+    Args:
+        lod_id: The LOD entry ID
+
+    Returns:
+        Compact conjugation dictionary for verbs
+    """
+    try:
+        data = entry_api(lod_id)
+    except LODAPIError as error:
+        return _tool_error(error)
+
+    result = project_conjugation(data, lod_id)
+    if "inf" not in result:
+        return _local_error("not_conjugated", f"No verb conjugation available for {lod_id}")
+    return result
+
+
+@mcp.tool()
+def get_conjugations(lod_ids: list[str]) -> dict[str, dict[str, Any]]:
+    """
+    Get compact verb conjugation data for multiple LOD entry IDs.
+
+    Args:
+        lod_ids: List of LOD entry IDs to look up
+
+    Returns:
+        Dictionary mapping each LOD ID to its conjugation data
+    """
+    results: dict[str, dict[str, Any]] = {}
+    for lod_id in lod_ids:
+        try:
+            data = entry_api(lod_id)
+        except LODAPIError as error:
+            results[lod_id] = _tool_error(error)
+            continue
+
+        result = project_conjugation(data, lod_id)
+        if "inf" not in result:
+            results[lod_id] = _local_error(
+                "not_conjugated",
+                f"No verb conjugation available for {lod_id}",
+            )
+            continue
+
+        results[lod_id] = result
 
     return results
 

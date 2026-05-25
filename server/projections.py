@@ -6,6 +6,7 @@ from typing import Any, Iterable
 
 TRANSLATION_PART_TYPES = {"translation", "semanticClarifier"}
 EXAMPLE_PART_TYPES = {"word", "inflectedHeadword"}
+PERSON_KEYS = ("p1", "p2", "p3", "p4", "p5", "p6")
 
 
 def compact(obj: Any) -> Any:
@@ -143,6 +144,65 @@ def project_entry(
         result["infl"] = inflections
 
     result.update(extract_flags(entry))
+    return compact(result)
+
+
+def _person_table(
+    forms: dict[str, Any] | None,
+    allowed_keys: tuple[str, ...] = PERSON_KEYS,
+) -> dict[str, str]:
+    """Extract a compact person table."""
+    if not forms:
+        return {}
+    return {
+        key: forms[key]
+        for key in allowed_keys
+        if key in forms and forms[key]
+    }
+
+
+def extract_conjugation(entry: dict[str, Any]) -> dict[str, Any]:
+    """Extract compact verb conjugation data."""
+    conjugation = entry.get("tables", {}).get("verbConjugation")
+    if not conjugation:
+        return {}
+
+    attributes = conjugation.get("@attributes", {})
+    indicative = conjugation.get("indicative", {})
+    conditional = conjugation.get("conditional", {})
+    imperative = conjugation.get("imperative", {})
+
+    result: dict[str, Any] = {
+        "inf": conjugation.get("infinitive"),
+        "pp": conjugation.get("pastParticiple"),
+        "aux": conjugation.get("auxiliaryVerb"),
+        "ind": {
+            "prs": _person_table(indicative.get("present")),
+            "pst": _person_table(indicative.get("pastSimple")),
+            "pf": _person_table(indicative.get("presentPerfect")),
+            "plf": _person_table(indicative.get("pastPerfect")),
+        },
+        "cnd": {
+            "prs": _person_table(conditional.get("presentSimple")),
+            "pf": _person_table(conditional.get("presentPerfect")),
+            "plf": _person_table(conditional.get("pastPerfect")),
+        },
+        "imp": _person_table(imperative.get("present"), allowed_keys=("p2", "p5")),
+    }
+    if attributes.get("separableVerb"):
+        result["sep"] = attributes.get("separableVerb") == "yes"
+    return compact(result)
+
+
+def project_conjugation(data: dict[str, Any], lod_id: str) -> dict[str, Any]:
+    """Project a raw LOD entry response into a compact conjugation shape."""
+    entry = data.get("entry", {})
+    result = {
+        "id": lod_id,
+        "w": entry.get("lemma", lod_id),
+        "pos": entry.get("partOfSpeech"),
+    }
+    result.update(extract_conjugation(entry))
     return compact(result)
 
 

@@ -72,6 +72,63 @@ RAW_ENTRY = {
     }
 }
 
+RAW_VERB_ENTRY = {
+    "entry": {
+        "lemma": "goen",
+        "partOfSpeech": "VRB",
+        "tables": {
+            "verbConjugation": {
+                "@attributes": {
+                    "id": "GOEN1",
+                    "model": "GOEN1",
+                    "separableVerb": "no",
+                },
+                "infinitive": "goen",
+                "pastParticiple": "gaangen / gaang",
+                "auxiliaryVerb": "sinn",
+                "indicative": {
+                    "present": {
+                        "p1": "ginn",
+                        "p2": "gees",
+                        "p3": "geet",
+                        "p4": "ginn",
+                        "p5": "gitt",
+                        "p6": "ginn",
+                    },
+                    "pastSimple": {
+                        "p1": "goung",
+                        "p2": "goungs",
+                    },
+                    "presentPerfect": {
+                        "p1": "si gaangen / gaang",
+                    },
+                    "pastPerfect": {
+                        "p1": "war gaangen / gaang",
+                    },
+                },
+                "conditional": {
+                    "presentSimple": {
+                        "p1": "géing",
+                        "p2": "géings",
+                    },
+                    "presentPerfect": {
+                        "p1": "géif / géing goen",
+                    },
+                    "pastPerfect": {
+                        "p1": "wier gaangen / gaang",
+                    },
+                },
+                "imperative": {
+                    "present": {
+                        "p2": "géi!",
+                        "p5": "gitt!",
+                    }
+                },
+            }
+        },
+    }
+}
+
 
 @pytest.fixture(autouse=True)
 def clear_cache() -> None:
@@ -140,6 +197,75 @@ def test_get_entry_and_get_entries_share_the_same_projection(
     assert batch == {"HAUS1": single}
     assert tools.get_def("HAUS1", "en") == "Haus: house building; household family"
     assert tools.get_defs(["HAUS1"], "en") == {"HAUS1": "Haus: house building; household family"}
+
+
+def test_get_conjugation_and_get_conjugations_share_the_same_projection(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setattr(tools, "entry_api", lambda lod_id: RAW_VERB_ENTRY)
+
+    single = tools.get_conjugation("GOEN1")
+    batch = tools.get_conjugations(["GOEN1"])
+
+    assert single == {
+        "id": "GOEN1",
+        "w": "goen",
+        "pos": "VRB",
+        "inf": "goen",
+        "pp": "gaangen / gaang",
+        "aux": "sinn",
+        "sep": False,
+        "ind": {
+            "prs": {
+                "p1": "ginn",
+                "p2": "gees",
+                "p3": "geet",
+                "p4": "ginn",
+                "p5": "gitt",
+                "p6": "ginn",
+            },
+            "pst": {
+                "p1": "goung",
+                "p2": "goungs",
+            },
+            "pf": {
+                "p1": "si gaangen / gaang",
+            },
+            "plf": {
+                "p1": "war gaangen / gaang",
+            },
+        },
+        "cnd": {
+            "prs": {
+                "p1": "géing",
+                "p2": "géings",
+            },
+            "pf": {
+                "p1": "géif / géing goen",
+            },
+            "plf": {
+                "p1": "wier gaangen / gaang",
+            },
+        },
+        "imp": {
+            "p2": "géi!",
+            "p5": "gitt!",
+        },
+    }
+    assert batch == {"GOEN1": single}
+
+
+def test_get_conjugation_returns_not_conjugated_for_non_verbs(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setattr(tools, "entry_api", lambda lod_id: RAW_ENTRY)
+
+    assert tools.get_conjugation("HAUS1") == {
+        "error": {
+            "type": "not_conjugated",
+            "message": "No verb conjugation available for HAUS1",
+        }
+    }
 
 
 def test_get_entry_returns_structured_error_payload(monkeypatch: pytest.MonkeyPatch) -> None:

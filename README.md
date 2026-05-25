@@ -12,7 +12,7 @@ This MCP server enables Claude to look up Luxembourgish words, get translations,
 - **Resilient**: Retries transient upstream failures once and returns structured error payloads
 - **Luxembourgish-First Suggestions**: Autocomplete only returns Luxembourgish entries
 - **Multi-Language**: Supports German (de), French (fr), English (en), Portuguese (pt), and Dutch (nl) translations
-- **Batch Operations**: Look up multiple words/IDs in a single call (`search_words`, `get_entries`, `get_defs`)
+- **Batch Operations**: Look up multiple words/IDs in a single call (`search_words`, `get_entries`, `get_defs`, `get_conjugations`)
 
 ## Installation
 
@@ -273,13 +273,52 @@ get_defs(["HAUS1", "SCHOUL1"], lang="en")
 
 ---
 
-### 6. `cache_stats`
+### 6. `get_conjugation`
+
+Get compact verb conjugation data for a single LOD entry ID.
+
+**Parameters:**
+
+- `lod_id` (str): The LOD entry ID
+
+**Returns:** `Dict` - Compact conjugation dictionary
+
+**Example:**
+
+```python
+get_conjugation("GOEN1")
+# Returns:
+# {
+#   "id": "GOEN1",
+#   "w": "goen",
+#   "pos": "VRB",
+#   "inf": "goen",
+#   "pp": "gaangen / gaang",
+#   "aux": "sinn",
+#   "sep": false,
+#   "ind": {"prs": {"p1": "ginn", "p2": "gees"}},
+#   "cnd": {"prs": {"p1": "géing", "p2": "géings"}},
+#   "imp": {"p2": "géi!", "p5": "gitt!"}
+# }
+```
+
+### 7. `get_conjugations`
+
+Get compact verb conjugation data for multiple LOD entry IDs at once.
+
+**Parameters:**
+
+- `lod_ids` (List[str]): List of LOD entry IDs
+
+**Returns:** `Dict[str, Dict]` - Mapping of LOD IDs to conjugation data
+
+### 8. `cache_stats`
 
 Get cache performance statistics.
 
 **Returns:** `str` - Stats in format "hits/misses/rate% (size items)"
 
-### 7. `cache_clear`
+### 9. `cache_clear`
 
 Clear the API response cache.
 
@@ -309,7 +348,10 @@ ids = search_word("goen")
 
 # Get full entry
 entry = get_entry("GOEN1", langs="en", max_examples=1)
-# Check entry["infl"] for conjugated forms
+
+# Get dedicated conjugation table
+conj = get_conjugation("GOEN1")
+# Check conj["ind"]["prs"] for present tense forms
 ```
 
 ### Batch Lookup Example (Recommended)
@@ -325,6 +367,9 @@ defs = get_defs(ids, lang="en")
 
 # Get full entries for multiple IDs
 entries = get_entries(ids, langs="de,fr", max_examples=1)
+
+# Get conjugations for multiple verbs
+conjugations = get_conjugations(["GOEN1"])
 ```
 
 ## Using the LOD Skill (Non-MCP Tools)
@@ -338,7 +383,7 @@ The skill provides structured guidance for:
 
 - **Translation lookups** (de, fr, en, pt, nl)
 - **Pronunciation** (IPA notation)
-- **Conjugations** (complete verb tables)
+- **Conjugations** (compact verb tables)
 - **Example sentences** with audio links
 - **Batch operations** (efficient multi-word lookups)
 - **Error handling** patterns
