@@ -14,9 +14,11 @@ try:
         suggest_api,
     )
     from server.cache import cache
+    from server.pos import normalize_pos
 except ImportError:
     from api import LODAPIError, entry_api, search_api, suggest_api
     from cache import cache
+    from pos import normalize_pos
 
 mcp = FastMCP("lod-mcp")
 
@@ -51,8 +53,7 @@ def _brief_results(items: list[dict[str, Any]], max_results: int) -> dict[str, s
     for item in items[:max_results]:
         lod_id = item.get("id")
         word_text = item.get("word_lb")
-        pos = item.get("pos", "")
-        pos_short = pos.replace("SUBST", "N").replace("VRB", "V") if pos else ""
+        pos_short = normalize_pos(item.get("pos"))
         if lod_id and word_text:
             results[lod_id] = f"{word_text} ({pos_short})" if pos_short else word_text
     return results
@@ -146,6 +147,9 @@ def autocomplete(prefix: str, limit: int = 5) -> str | dict[str, Any]:
     seen = set()
     words: list[str] = []
     for item in data.get("items", []):
+        if item.get("lang") != "lb":
+            continue
+
         word = item.get("word")
         if word and word not in seen:
             seen.add(word)
